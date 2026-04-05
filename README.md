@@ -348,6 +348,66 @@ Clears dirty flag
 
 ---
 
+## Agent Tool Integration Plan
+
+This section provides design planning only and does not include implementation.
+Goal: package current editor capabilities into stable, composable `tools` so an Agent can run a full loop of "understand scene → perform edits → validate result".
+
+### 1) Scope & Priorities
+
+**Phase 1 (MVP)**
+- Query tools: `getSceneTree`, `getNodeById`, `listNodesByType`
+- Edit tools: `createNode`, `updateNode`, `deleteNode`
+- Selection tools: `selectNode`, `focusNode`
+
+**Phase 2 (Enhanced)**
+- Composite tools: `drawWallFromPoints`, `placeItemOnWall`, `createZoneFromPolygon`
+- Batch operations: `batchUpdateNodes` (transactional execution + rollback)
+
+**Phase 3 (Intelligent)**
+- Constraint checks: integrate `spatialGridManager` for pre-placement feasibility checks
+- Auto-fix: normalize common invalid inputs and return actionable hints
+
+### 2) Architecture
+
+- Add an Agent Tool Adapter layer in `packages/core` (do not expose internal stores directly)
+- Reuse existing `useScene` / `useViewer` / `useEditor` capabilities inside tool handlers
+- Define Tool Contracts via a unified input/output protocol (recommended: JSON Schema definition + Zod validation)
+- Surface execution results and errors through the existing Event Bus for subscriptions
+
+### 3) Tool Contract Specification
+
+Each tool should follow a fixed structure:
+- `name`: unique name (e.g. `scene.createNode`)
+- `description`: behavior and boundaries
+- `inputSchema`: parameter definition (required fields, defaults, ranges)
+- `execute(input, context)`: execution function where `input` is validated args and `context` carries session/permission context
+- `outputSchema`: success response shape
+- `errors`: enumerable error codes (e.g. `NODE_NOT_FOUND`, `INVALID_LEVEL`)
+
+### 4) Safety & Stability
+
+- Permission tiers: separate read-only tools from write tools (enabled by session policy)
+- Idempotency control: support `requestId` to deduplicate write operations
+- Transaction boundary: rollback when batch writes fail
+- Audit logs: record input summary, result, latency, and error code
+
+### 5) Acceptance Criteria
+
+- Agent can complete: read scene → create/update nodes → validate result → return explainable output
+- Tool error codes cover major failure paths and support agent retry/parameter rewrite
+- Existing manual editor workflow remains intact while Agent calls run in parallel
+
+### 6) Rollout Order
+
+1. Define Tool Registry and common contracts
+2. Integrate read-only tools first (low risk, validate agent call chain)
+3. Integrate single-node write tools (`create` / `update` / `delete`)
+4. Integrate composite tools and batch operations
+5. Add observability (logs, error metrics, call tracing)
+
+---
+
 ## Getting Started
 
 ### Development
