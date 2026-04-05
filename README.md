@@ -348,6 +348,65 @@ Clears dirty flag
 
 ---
 
+## Agent Tool 接入计划（仅设计，不含开发）
+
+目标：将当前编辑器能力封装为一组稳定、可组合的 `tools`，供 Agent 通过统一协议调用，实现“理解场景 → 执行编辑 → 校验结果”的闭环。
+
+### 1) 范围与优先级
+
+**Phase 1（MVP）**
+- 查询类：`getSceneTree`、`getNodeById`、`listNodesByType`
+- 编辑类：`createNode`、`updateNode`、`deleteNode`
+- 选择类：`selectNode`、`focusNode`
+
+**Phase 2（增强）**
+- 组合工具：`drawWallFromPoints`、`placeItemOnWall`、`createZoneFromPolygon`
+- 批处理：`batchUpdateNodes`（事务式执行 + 回滚）
+
+**Phase 3（智能化）**
+- 约束校验：结合 `spatialGridManager` 做放置可行性预检查
+- 自动修复：对常见输入错误进行参数归一化与提示
+
+### 2) 架构方案
+
+- 在 `packages/core` 增加 Agent Tool Adapter 层（不直接暴露内部 store）
+- Tool Handler 内部复用现有 `useScene` / `useViewer` / `useEditor` 能力
+- 通过统一输入输出协议（建议 JSON Schema + Zod）定义 tool contract
+- 事件透出基于现有 Event Bus，提供可订阅的执行结果与错误事件
+
+### 3) Tool Contract 规范
+
+每个 tool 固定结构：
+- `name`：唯一名称（如 `scene.createNode`）
+- `description`：语义与边界
+- `inputSchema`：参数定义（必填、默认值、范围）
+- `execute(input, context)`：执行函数
+- `outputSchema`：成功返回结构
+- `errors`：可枚举错误码（如 `NODE_NOT_FOUND`、`INVALID_LEVEL`）
+
+### 4) 安全与稳定性
+
+- 权限分级：只读工具与写工具隔离（可按会话策略启用）
+- 幂等控制：写操作支持 `requestId` 防重
+- 事务边界：批量写入失败时可回滚
+- 审计日志：记录调用参数摘要、结果、耗时、错误码
+
+### 5) 验收标准
+
+- Agent 能完成：读取场景 → 新建/修改节点 → 校验结果 → 返回可解释输出
+- Tool 错误码覆盖主要失败路径，且信息可用于 Agent 自动重试或改写参数
+- 不破坏现有编辑器交互链路（手工操作与 Agent 调用并行可用）
+
+### 6) 落地顺序（建议）
+
+1. 定义 Tool Registry 与通用 contract
+2. 接入只读工具（低风险，先打通 Agent 调用链路）
+3. 接入单节点写工具（create/update/delete）
+4. 接入组合工具与批处理
+5. 补充可观测性（日志、错误统计、调用追踪）
+
+---
+
 ## Getting Started
 
 ### Development
